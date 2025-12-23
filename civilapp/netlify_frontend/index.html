@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting to Face Chat</title>
+    <script>
+        window.onload = async function() {
+            try {
+                const res = await fetch("https://civilai-e26f8-default-rtdb.asia-southeast1.firebasedatabase.app/url.json");
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    document.body.innerText = "❌ Cloudflare URL not found.";
+                }
+            } catch (e) {
+                document.body.innerText = "❌ API not reachable.";
+            }
+        };
+    </script>
+
+
+
+</head>
+<body>
+    <p>Loading Face Chat...</p>
+</body>
+</html>

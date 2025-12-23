@@ -1,0 +1,23 @@
+# Core Django
+Django==5.2.4
+pandas==2.3.0
+python-dotenv==1.0.1
+markdown==3.8.2
+requests==2.32.4
+
+# LLM & RAG
+llama_cpp_python==0.3.12
+langchain==0.1.13
+langchain-community==0.0.38
+langchain-text-splitters==0.0.2
+transformers==4.39.3
+sentence-transformers==2.6.1
+faiss-cpu==1.7.4
+PyMuPDF==1.22.5
+torch==2.5.1
+huggingface-hub==0.23.0
+
+# Server & Tunnels
+uvicorn==0.34.3
+asgiref==3.9.1
+whitenoise==6.6.0

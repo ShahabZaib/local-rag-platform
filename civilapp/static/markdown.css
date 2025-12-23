@@ -1,0 +1,60 @@
+/* Markdown Styling for Chat */
+.markdown-body {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #1f2937;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.markdown-body h2 {
+    font-size: 1.25rem;
+    /* Make H2 smaller than browser default (1.5em) */
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 0.25rem;
+}
+
+.markdown-body h3 {
+    font-size: 1.1rem;
+}
+
+.markdown-body p {
+    margin-bottom: 0.75rem;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+    list-style-type: disc;
+}
+
+.markdown-body li {
+    margin-bottom: 0.25rem;
+}
+
+.markdown-body strong {
+    font-weight: 700;
+    color: #4b5563;
+    /* Slightly darker for emphasis */
+}
+
+.markdown-body a {
+    color: #4f46e5;
+    text-decoration: underline;
+}
+
+.markdown-body blockquote {
+    border-left: 4px solid #e5e7eb;
+    padding-left: 1rem;
+    color: #6b7280;
+    font-style: italic;
+    margin-bottom: 1rem;
+}

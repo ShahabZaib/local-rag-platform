@@ -1,0 +1,33 @@
+# Environment variables (Secrets)
+.env
+
+# Large AI Models (Large files)
+Model/
+*.gguf
+
+# Vector Databases (Local indices)
+MCE_SOURCE/
+vector_store/
+
+# Local Database
+db.sqlite3
+
+# Python/Django junk
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+staticfiles/
+media/
+
+# User Uploaded Data
+uploaded_pdfs/
+llm_output_debug.txt
+llm_output_rendered.html
+session_reset.flag
+host_flag.txt
+
+# OS junk
+.DS_Store
+Thumbs.db
