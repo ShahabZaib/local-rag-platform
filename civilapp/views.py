@@ -412,3 +412,35 @@ def users_api(request):
                 return JsonResponse({'error': str(e)}, status=500)
         return JsonResponse({'error': 'Invalid action'}, status=400)
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@csrf_exempt
+@debug_trace
+def stats_api(request):
+    """Returns real-time system metrics for the Admin Dashboard."""
+    if 'user_id' not in request.session:
+        return JsonResponse({'error': 'Unauthorized'}, status=401)
+    
+    try:
+        # Document Count
+        folder_temp = "uploaded_pdfs"
+        doc_count = 0
+        if os.path.exists(folder_temp):
+            doc_count = len([f for f in os.listdir(folder_temp) if f.endswith('.pdf')])
+        
+        # User Count
+        user_count = 0
+        if os.path.exists(csv_path):
+            df = pd.read_csv(csv_path)
+            user_count = len(df)
+            
+        # Mocked Values for Demo/Dashboard feel
+        # In a production app, these would come from system monitoring or DB
+        return JsonResponse({
+            'doc_count': doc_count,
+            'user_count': user_count,
+            'uptime': '99.9%',
+            'latency': '~2.1s',
+            'status': 'HEALTHY'
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
