@@ -5,7 +5,8 @@ const API = {
   CHAT: "/api/chat/",        // POST: text/file query -> { reply, tokens_used }
   UPLOAD: "/api/upload/",    // POST: files -> { ok: true }
   TRAIN: "/api/train/",      // POST: { action: "train" } -> { ok: true }
-  USERS: "/api/users/"       // POST: add/remove; GET: list -> { users: [...] }
+  USERS: "/api/users/",       // POST: add/remove; GET: list -> { users: [...] }
+  STATS: "/api/status/"      // GET: live metrics
 };
 // Optional: set an auth header if needed
 const AUTH_HEADER = null;     // e.g., { "Authorization": "Bearer <token>" }
@@ -19,6 +20,24 @@ const chatWindow = document.getElementById("chatWindow");
 
 const globalLoader = document.getElementById("globalLoader");
 const loaderText = document.getElementById("loaderText");
+const welcomeScreen = document.getElementById("welcomeScreen");
+const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+
+// Admin Pro+ Hooks
+const confirmModal = document.getElementById("confirmModal");
+const confirmTitle = document.getElementById("confirmTitle");
+const confirmText = document.getElementById("confirmText");
+const confirmBtn = document.getElementById("confirmBtn");
+
+const syncProgressContainer = document.getElementById("syncProgressContainer");
+const syncProgressLabel = document.getElementById("syncProgressLabel");
+const syncProgressPercent = document.getElementById("syncProgressPercent");
+const syncProgressBarFill = document.getElementById("syncProgressBarFill");
+
+const statDocCount = document.getElementById("stat-doc-count");
+const statUserCount = document.getElementById("stat-user-count");
+const statUptime = document.getElementById("stat-uptime");
+const statLatency = document.getElementById("stat-latency");
 
 const tokenSlider = document.getElementById("maxTokens");
 const tokenValueLbl = document.getElementById("tokenValue");
@@ -103,17 +122,109 @@ function removeTypingIndicators() {
   [...chatWindow.querySelectorAll('[data-typing="true"]')].forEach(n => n.remove());
 }
 
+/* ========= ADMIN PRO+ LOGIC ========= */
+async function loadDashboardStats() {
+  try {
+    const res = await fetch(apiURL(API.STATS), { headers: headers() });
+    const data = await res.json();
+    if (data.error) return;
+
+    if (statDocCount) statDocCount.innerHTML = `${data.doc_count} <span class="text-sm font-normal text-gray-400">Docs</span>`;
+    if (statUserCount) statUserCount.innerHTML = `${data.user_count} <span class="text-sm font-normal text-gray-400">Users</span>`;
+    if (statUptime) statUptime.textContent = data.uptime;
+    if (statLatency) statLatency.textContent = data.latency;
+  } catch (e) {
+    console.error("Failed to load dashboard stats", e);
+  }
+}
+
+function showConfirmModal(title, text, onConfirm) {
+  if (!confirmModal) return;
+  confirmTitle.textContent = title;
+  confirmText.textContent = text;
+  confirmModal.classList.remove("hidden");
+  confirmModal.classList.add("flex");
+
+  // Clean old listeners
+  const newBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+
+  newBtn.onclick = () => {
+    onConfirm();
+    closeConfirmModal();
+  };
+}
+window.showConfirmModal = showConfirmModal;
+
+function closeConfirmModal() {
+  if (confirmModal) {
+    confirmModal.classList.add("hidden");
+    confirmModal.classList.remove("flex");
+  }
+}
+window.closeConfirmModal = closeConfirmModal;
+
+function setSyncProgress(percent, label) {
+  if (!syncProgressContainer) return;
+  syncProgressContainer.classList.remove("hidden");
+  syncProgressLabel.textContent = label;
+  syncProgressPercent.textContent = `${percent}%`;
+  syncProgressBarFill.style.width = `${percent}%`;
+
+  if (percent >= 100) {
+    setTimeout(() => syncProgressContainer.classList.add("hidden"), 3000);
+  }
+}
+
+/* ========= PREMIUM INTERACTION ========= */
+function quickStart(text) {
+  if (messageInput) {
+    messageInput.value = text;
+    chatForm.dispatchEvent(new Event('submit'));
+  }
+}
+window.quickStart = quickStart;
+
+function handleScroll() {
+  if (!chatWindow || !scrollToBottomBtn) return;
+  const isScrolledUp = chatWindow.scrollHeight - chatWindow.scrollTop - chatWindow.clientHeight > 200;
+  if (isScrolledUp) {
+    scrollToBottomBtn.classList.add("scroll-btn-visible");
+  } else {
+    scrollToBottomBtn.classList.remove("scroll-btn-visible");
+  }
+}
+if (chatWindow) chatWindow.addEventListener("scroll", handleScroll);
+
+function scrollToBottom() {
+  chatWindow.scrollTo({
+    top: chatWindow.scrollHeight,
+    behavior: 'smooth'
+  });
+}
+window.scrollToBottom = scrollToBottom;
+
+// Initialize Stats Polling
+setInterval(loadDashboardStats, 30000); // Every 30s
+loadDashboardStats();
+
 /* ========= CHAT RENDER ========= */
 function renderMessage(role, text) {
   const isUser = role === "user";
+
+  // Hide welcome screen on first message
+  if (welcomeScreen && !welcomeScreen.classList.contains("hidden")) {
+    welcomeScreen.classList.add("hidden");
+  }
+
   const bubble = document.createElement("div");
-  bubble.className = `message-bubble chat-fade ${isUser ? "mb-3" : "mb-6"}`;
+  bubble.className = `message-bubble chat-fade message-slide-in ${isUser ? "mb-3" : "mb-6"}`;
 
   bubble.innerHTML = `
     <div class="${isUser ? "flex justify-end" : "flex justify-start"}">
-      <div class="max-w-3xl w-auto glass-card rounded-2xl p-4 ${isUser ? "bg-white" : "markdown-body"}">
-        <div class="text-sm font-semibold ${isUser ? "text-gray-700" : "text-purple-700"} mb-1">
-          ${isUser ? "You" : "Assistant"}
+      <div class="max-w-3xl w-auto glass-card rounded-2xl p-4 ${isUser ? "bg-white" : "markdown-body"} shadow-sm">
+        <div class="text-sm font-semibold flex items-center ${isUser ? "text-gray-700 justify-end" : "text-purple-700"} mb-1">
+          ${isUser ? 'You <i class="fas fa-user-circle ml-2"></i>' : '<i class="fas fa-robot mr-2"></i> Assistant'}
         </div>
         ${isUser
       ? `<div class="text-gray-800 whitespace-pre-wrap">${escapeHtml(text)}</div>`
@@ -231,9 +342,9 @@ if (voiceBtn) {
       rec.lang = "en-US";
       rec.interimResults = false;
       rec.maxAlternatives = 1;
-      rec.onstart = () => voiceBtn.classList.add("pulse-record");
-      rec.onend = () => voiceBtn.classList.remove("pulse-record");
-      rec.onerror = () => voiceBtn.classList.remove("pulse-record");
+      rec.onstart = () => voiceBtn.classList.add("voice-recording-pulse");
+      rec.onend = () => voiceBtn.classList.remove("voice-recording-pulse");
+      rec.onerror = () => voiceBtn.classList.remove("voice-recording-pulse");
       rec.onresult = (evt) => {
         const transcript = evt.results?.[0]?.[0]?.transcript || "";
         if (messageInput) messageInput.value = transcript;
@@ -281,39 +392,40 @@ if (voiceBtn) {
   });
 }
 
-/* ========= ADMIN: PANEL TOGGLE ========= */
-const adminMainMenu = document.getElementById("adminMainMenu");
-const adminTrainingSection = document.getElementById("adminTrainingSection");
-const adminUserSection = document.getElementById("adminUserSection");
+/* ========= ADMIN: DASHBOARD & TABS ========= */
+function switchTab(tabId) {
+  // Hide all contents
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+  // Remove active from all buttons
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
 
-function showAdminMenu() {
-  adminMainMenu.classList.remove("hidden");
-  adminTrainingSection.classList.add("hidden");
-  adminUserSection.classList.add("hidden");
+  // Show selected
+  const targetContent = document.getElementById(`content-${tabId}`);
+  const targetBtn = document.getElementById(`tab-${tabId}`);
+
+  if (targetContent) targetContent.classList.remove("hidden");
+  if (targetBtn) targetBtn.classList.add("active");
+
+  setAdminStatus(`Viewing ${tabId.toUpperCase()}...`);
+
+  // Auto-load data if needed
+  if (tabId === 'users') loadDashboardUsers();
 }
+window.switchTab = switchTab;
 
-function showTrainingSection() {
-  adminMainMenu.classList.add("hidden");
-  adminTrainingSection.classList.remove("hidden");
-  adminUserSection.classList.add("hidden");
+function setAdminStatus(text, color = "gray-400") {
+  const bar = document.getElementById("adminStatusText");
+  if (bar) {
+    bar.textContent = text;
+    bar.className = `text-[10px] font-bold text-${color} uppercase tracking-widest`;
+  }
 }
-
-function showUserSection() {
-  adminMainMenu.classList.add("hidden");
-  adminTrainingSection.classList.add("hidden");
-  adminUserSection.classList.remove("hidden");
-}
-
-// Global exposes for HTML onclicks
-window.showAdminMenu = showAdminMenu;
-window.showTrainingSection = showTrainingSection;
-window.showUserSection = showUserSection;
 
 function toggleAdminPanel() {
-  console.log("toggleAdminPanel called"); // DEBUG
+  console.log("toggleAdminPanel called");
   const isHidden = adminModal.classList.contains("hidden");
   if (isHidden) {
-    showAdminMenu(); // Reset to menu when opening
+    switchTab('status'); // Default tab
     adminModal.classList.remove("hidden");
     adminModal.classList.add("flex");
   } else {
@@ -322,6 +434,26 @@ function toggleAdminPanel() {
   }
 }
 window.toggleAdminPanel = toggleAdminPanel;
+
+/* File Preview Logic */
+if (pdfInput) {
+  pdfInput.addEventListener("change", () => {
+    const preview = document.getElementById("filePreview");
+    if (!preview) return;
+    const files = pdfInput.files;
+    if (files.length > 0) {
+      preview.classList.remove("hidden");
+      preview.innerHTML = Array.from(files).map(f => `
+        <span class="bg-purple-100 text-purple-700 text-[10px] px-2 py-1 rounded-md border border-purple-200">
+          ${f.name.substring(0, 15)}${f.name.length > 15 ? "..." : ""}
+        </span>
+      `).join("");
+      setAdminStatus(`${files.length} Files selected`, "blue-500");
+    } else {
+      preview.classList.add("hidden");
+    }
+  });
+}
 
 /* ========= ADMIN: ADD USER ========= */
 function showAddUserModal() {
@@ -375,10 +507,10 @@ function hideRemoveUserModal() {
 window.showRemoveUserModal = showRemoveUserModal;
 window.hideRemoveUserModal = hideRemoveUserModal;
 
-async function loadUsersForRemoval() {
-  const tbody = document.getElementById("removeUserTableBody");
+async function loadDashboardUsers() {
+  const tbody = document.getElementById("dashboardUserTable");
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td class="px-6 py-4" colspan="4">Loading...</td></tr>`;
+  tbody.innerHTML = `<tr><td class="px-6 py-4" colspan="3">Loading Secure User List...</td></tr>`;
   try {
     const res = await fetch(apiURL(API.USERS), {
       method: "POST",
@@ -388,39 +520,72 @@ async function loadUsersForRemoval() {
     const data = await res.json();
     const users = data?.users || [];
     tbody.innerHTML = users.map(u => `
-      <tr class="border-b border-gray-100">
-        <td class="px-6 py-4">${escapeHtml(String(u.ID || ""))}</td>
-        <td class="px-6 py-4">${escapeHtml(String(u.Name || ""))}</td>
-        <td class="px-6 py-4">-</td>
-        <td class="px-6 py-4 text-center">
-          <button class="px-4 py-2 rounded-xl bg-red-500 text-white hover-lift" onclick="removeUser('${String(u.ID || "")}')">
-            Remove
+      <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+        <td class="px-6 py-4">
+          <div class="flex items-center space-x-3">
+             <div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-white font-bold text-[10px]">
+               ${(u.Name || "U").charAt(0)}
+             </div>
+             <div>
+               <p class="font-bold text-gray-800">${escapeHtml(String(u.Name || "Unknown"))}</p>
+               <p class="text-[10px] text-gray-400">ID: ${escapeHtml(String(u.ID || ""))}</p>
+             </div>
+          </div>
+        </td>
+        <td class="px-6 py-4">
+          <span class="px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-700">AUTHORIZED</span>
+        </td>
+        <td class="px-6 py-4 text-right">
+          <button class="text-red-400 hover:text-red-600 p-2 transition-colors" onclick="removeUser('${String(u.ID || "")}')">
+            <i class="fas fa-trash-can"></i>
           </button>
         </td>
       </tr>
     `).join("");
   } catch (e) {
-    tbody.innerHTML = `<tr><td class="px-6 py-4" colspan="4">Error loading users</td></tr>`;
+    tbody.innerHTML = `<tr><td class="px-6 py-4" colspan="3 text-red-500">Failed to fetch users.</td></tr>`;
   }
+}
+window.loadDashboardUsers = loadDashboardUsers;
+
+// Keep search logic for dashboard
+const dashboardSearch = document.getElementById("userDashboardSearch");
+if (dashboardSearch) {
+  dashboardSearch.addEventListener("input", () => {
+    const q = dashboardSearch.value.toLowerCase();
+    const rows = document.querySelectorAll("#dashboardUserTable tr");
+    rows.forEach(r => {
+      if (r.children.length > 1) {
+        r.style.display = r.textContent.toLowerCase().includes(q) ? "" : "none";
+      }
+    });
+  });
 }
 
 async function removeUser(id) {
-  if (!confirm(`Remove user ${id}?`)) return;
-  showLoader("Removing user...");
-  try {
-    const res = await fetch(apiURL(API.USERS), {
-      method: "POST",
-      headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ action: "remove_user", user_id_to_remove: id })
-    });
-    const data = await res.json();
-    if (data?.error) throw new Error(data?.error || "Remove failed");
-    await loadUsersForRemoval();
-  } catch (e) {
-    alert("Error: " + e.message);
-  } finally {
-    hideLoader();
-  }
+  showConfirmModal(
+    "Remove Identity?",
+    `Are you sure you want to revoke access for ID: ${id}? This user will no longer be able to log in.`,
+    async () => {
+      showLoader("Revoking access...");
+      try {
+        const res = await fetch(apiURL(API.USERS), {
+          method: "POST",
+          headers: headers({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ action: "remove_user", user_id_to_remove: id })
+        });
+        const data = await res.json();
+        if (data?.error) throw new Error(data?.error || "Remove failed");
+        await loadDashboardUsers();
+        await loadDashboardStats(); // Update user count
+        setAdminStatus("Identity successfully revoked", "green-500");
+      } catch (e) {
+        alert("Error: " + e.message);
+      } finally {
+        hideLoader();
+      }
+    }
+  );
 }
 window.removeUser = removeUser;
 
@@ -448,20 +613,34 @@ async function uploadAndTrain() {
   if (!pdfInput || !pdfInput.files?.length) return alert("Select one or more PDFs first.");
   const form = new FormData();
   [...pdfInput.files].forEach(f => form.append("files", f));
-  showLoader("Uploading PDFs...");
+
+  showLoader("Processing knowledge...");
+  setSyncProgress(10, "Uploading source files...");
+
   try {
     const up = await fetch(apiURL(API.UPLOAD), { method: "POST", body: form, headers: { ...(AUTH_HEADER || {}) } });
     const upData = await up.json();
     if (upData?.error) throw new Error(upData?.error || "Upload failed");
 
-    loaderText.textContent = "Indexing & training...";
-    const tr = await fetch(apiURL(API.TRAIN), { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify({ action: "train" }) });
-    const trData = await tr.json();
-    if (trData?.error) throw new Error(trData?.error || "Training failed");
-    alert("Upload complete. Training started.");
+    setSyncProgress(40, "Extracting text and chunking...");
+
+    setTimeout(async () => {
+      setSyncProgress(70, "Generating embeddings and indexing...");
+      const tr = await fetch(apiURL(API.TRAIN), { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify({ action: "train" }) });
+      const trData = await tr.json();
+      if (trData?.error) throw new Error(trData?.error || "Training failed");
+
+      setSyncProgress(100, "Knowledge Base Updated!");
+      setAdminStatus("Database Synced Successfully", "green-500");
+      await loadDashboardStats(); // Update doc count
+      document.getElementById("filePreview").classList.add("hidden");
+      hideLoader();
+    }, 1500);
+
   } catch (e) {
+    setSyncProgress(0, "Error");
+    setAdminStatus(`Error: ${e.message}`, "red-500");
     alert("Error: " + e.message);
-  } finally {
     hideLoader();
   }
 }
@@ -480,12 +659,31 @@ async function clearHistory() {
     });
     if (res.ok) {
       chatWindow.innerHTML = `
-        <div class="text-center text-gray-500 py-16 float-animation">
-          <div class="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-400 flex items-center justify-center shadow-2xl">
-            <i class="fas fa-comments text-3xl text-white"></i>
-          </div>
-          <p class="text-xl font-medium mb-2">Welcome to FACE!</p>
-          <p class="text-gray-400">How can I assist you today?</p>
+        <div id="welcomeScreen" class="h-full flex flex-col items-center justify-center text-center py-12">
+            <div class="w-24 h-24 mb-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-2xl float-animation">
+                <i class="fas fa-robot text-4xl text-white"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">PFRP Assistant</h2>
+            <p class="text-gray-500 mb-12 uppercase text-[10px] font-bold tracking-widest">Privacy-First RAG Platform</p>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl w-full px-4">
+                <button onclick="quickStart('Summarize the latest document')" class="quick-starter-card">
+                    <i class="fas fa-file-lines text-blue-500"></i>
+                    <span>Summarize the latest document</span>
+                </button>
+                <button onclick="quickStart('Who has access to this system?')" class="quick-starter-card">
+                    <i class="fas fa-users text-purple-500"></i>
+                    <span>Who has access to this system?</span>
+                </button>
+                <button onclick="quickStart('Explain the training process')" class="quick-starter-card">
+                    <i class="fas fa-brain text-pink-500"></i>
+                    <span>Explain the training process</span>
+                </button>
+                <button onclick="quickStart('How secure is my data?')" class="quick-starter-card">
+                    <i class="fas fa-shield-heart text-green-500"></i>
+                    <span>How secure is my data?</span>
+                </button>
+            </div>
         </div>`;
       messageCount = 0;
       totalTokens = 0;

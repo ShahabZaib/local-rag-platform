@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/upload/', views.upload_api, name='upload_api'),
     path('api/train/', views.train_api, name='train_api'),
     path('api/users/', views.users_api, name='users_api'),
+    path('api/status/', views.stats_api, name='stats_api'),
 ]
 
 if settings.DEBUG:
